@@ -1,7 +1,7 @@
 """Questions about YOUR code, generated and checked by the open-weight model."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from . import llm
 
@@ -20,27 +20,34 @@ CHECK_SYSTEM = (
 )
 
 
-def _code_block(repo: Dict[str, Any], max_chars: int = 3500) -> str:
-    parts, budget = [], max_chars
-    for path, text in repo["files"].items():
-        snippet = text[:budget]
-        parts.append(f"### {path}\n{snippet}")
-        budget -= len(snippet)
-        if budget <= 0:
-            break
-    return "\n\n".join(parts)
+def _code_block(repo: Dict[str, Any], max_chars: int = 4500) -> Tuple[str, List[str]]:
+    """Return (prompt text, paths actually shown). The budget is split across files so one long
+    file cannot crowd out the rest."""
+    files = {p: t for p, t in repo["files"].items() if t}
+    if not files:
+        return "", []
+    per_file = max_chars // len(files)
+    parts, shown = [], []
+    for path, text in files.items():
+        parts.append(f"### {path}\n{text[:per_file]}")
+        shown.append(path)
+    return "\n\n".join(parts), shown
 
 
 def generate(repo: Dict[str, Any], n: int = 4) -> List[Dict[str, str]]:
-    user = f"Project: {repo['name']}\nREADME: {repo['readme_excerpt']}\n\n{_code_block(repo)}\n\nAsk {n} questions."
+    code, shown = _code_block(repo)
+    if not shown:
+        raise llm.LLMUnavailable("No readable source files found in this repo.")
+    user = f"Project: {repo['name']}\nREADME: {repo['readme_excerpt']}\n\n{code}\n\nAsk {n} questions."
     out = llm.chat_json(GEN_SYSTEM, user)
     if not isinstance(out, list):
         raise llm.LLMUnavailable("Model returned the wrong JSON shape; try again or use a larger model.")
-    valid = set(repo["files"])
-    # Drop questions pointing at files that were never shown: cheap hallucination guard.
+    valid = set(shown)
+    # Drop questions pointing at files the model was never shown: cheap hallucination guard.
     return [q for q in out if isinstance(q, dict) and q.get("file") in valid and q.get("question")]
 
 
 def check_answer(repo: Dict[str, Any], question: str, answer: str) -> Dict[str, Any]:
-    user = f"Question: {question}\n\nCandidate answer: {answer}\n\nCode:\n{_code_block(repo)}"
+    code, _ = _code_block(repo)
+    user = f"Question: {question}\n\nCandidate answer: {answer}\n\nCode:\n{code}"
     return llm.chat_json(CHECK_SYSTEM, user)
