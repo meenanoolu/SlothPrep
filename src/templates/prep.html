@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }}</title>
+  <style>
+    :root {
+      --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9bb4;
+      --accent: #7cfc9a; --accent2: #5b9fd4; --border: #2a3544;
+      --easy: #3dd68c; --medium: #f5a524; --hard: #f31260;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { margin-bottom: 1.5rem; }
+    .back { font-size: 0.9rem; color: var(--muted); }
+    h1 { font-size: 1.75rem; margin: 0.4rem 0; }
+    h1 span { color: var(--accent); }
+    .meta { color: var(--muted); font-size: 0.9rem; }
+    .summary { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0 1.5rem; }
+    .chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.8rem; color: var(--muted); }
+    .chip strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    th, td { padding: 0.7rem 0.9rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    th { background: #141c28; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .diff { font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.45rem; border-radius: 4px; }
+    .diff.Easy { background: rgba(61,214,140,0.15); color: var(--easy); }
+    .diff.Medium { background: rgba(245,165,36,0.15); color: var(--medium); }
+    .diff.Hard { background: rgba(243,18,96,0.15); color: var(--hard); }
+    .freq { color: var(--muted); font-variant-numeric: tabular-nums; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--muted); }
+    .notice { background: #1c2a1f; border: 1px solid #2d4a35; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #a8d5b5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a class="back" href="/">← SlothPrep</a>
+      <h1>Patterns for <span>{{ company }}</span></h1>
+      <p class="meta">Fetched {{ fetched_at }} · Community GitHub lists (recency-aware)</p>
+    </header>
+    <div class="notice">
+      These are <strong>reported patterns</strong> from community datasets, not guaranteed interview questions.
+    </div>
+    <div class="summary">
+      {% for window, count in summary.items() %}
+      <div class="chip"><strong>{{ count }}</strong> {{ window.replace('_', ' ') }}</div>
+      {% endfor %}
+    </div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Title</th><th>Difficulty</th><th>Freq</th><th>Window</th></tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><a href="{{ q.url }}" target="_blank" rel="noopener">{{ q.title }}</a></td>
+          <td><span class="diff {{ q.difficulty }}">{{ q.difficulty }}</span></td>
+          <td class="freq">{% if q.frequency %}{{ '%.0f'|format(q.frequency) }}%{% else %}–{% endif %}</td>
+          <td class="freq">{{ q.source_window.replace('_', ' ') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <footer><p>{{ attribution }}</p></footer>
+  </div>
+</body>
+</html>
