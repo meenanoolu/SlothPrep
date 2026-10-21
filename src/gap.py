@@ -73,11 +73,18 @@ def build_plan(questions: List[Any], gaps: List[Dict[str, Any]], days: int, hour
     topics = topic_weights(questions)
     weak = [g for g in gaps if g["status"] in ("gap", "thin")][:4]
 
-    # tasks: (label, kind, weight)
+    # Every task needs at least 30 min, so the number of tasks is capped by the hours available.
+    # Priority when squeezed: mock interview > repo defense > top gaps > practice topics.
+    capacity = max(1, int(total * 2))
+    fixed = [("Mock interview + review mistakes", "mock", 50),
+             ("Defend your own repos (answer repo-specific questions)", "repos", 60)][:capacity]
+    room = capacity - len(fixed)
+    weak = weak[: min(len(weak), room // 3)]
+    topics = topics[: max(0, room - len(weak))]
+
     tasks = [(f"Practice: {t}", "patterns", w) for t, w in topics]
     tasks += [(f"Close gap: {g['skill']} ({g['status']})", "gap", g["weight"] * 40) for g in weak]
-    tasks += [("Defend your own repos (answer repo-specific questions)", "repos", 60)]
-    tasks += [("Mock interview + review mistakes", "mock", 50)]
+    tasks += fixed[::-1]  # repo defense, then the mock interview last
     wsum = sum(w for *_, w in tasks) or 1
 
     # Snap each task to 30 min (rounding down), then trim the biggest practice blocks until
