@@ -22,6 +22,9 @@ from .llm import summarize_experience, generate_repo_questions, LLMError
 from . import llm, repos as repos_mod, repo_questions
 from .gap import build_gap_map, build_plan, topic_weights
 
+from fastapi.responses import RedirectResponse
+
+
 # ---------- create app FIRST ----------
 app = FastAPI(
     title="SlothPrep",
@@ -241,3 +244,7 @@ def api_check_answer(github: str, repo: str, question: str, answer: str):
         return {"model": llm.MODEL, "result": repo_questions.check_answer(rs[repo], question, answer)}
     except llm.LLMUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse("/static/favicon.svg")
