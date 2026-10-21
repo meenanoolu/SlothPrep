@@ -1,109 +1,67 @@
-SlothPrep
+# SlothPrep
 
-Interview prep that does the hunting so you don’t have to.
+Interview prep that does the hunting so you don't have to. Google-first demo for the DEV
+Slow & Steady challenge, with open-weight AI at the core.
 
-Google-first demo for the Slow & Steady challenge. Open-source / open-weight AI at the core.
+Live: https://slothprep.onrender.com (free tier: the first visit after 15 idle minutes takes ~30-60 s to wake)
 
-Live
+## What it does
 
-Deploy on Render free → https://slothprep.onrender.com (or your service name)
+1. **Question patterns**: company-wise LeetCode lists (recency + frequency) from a community dataset.
+2. **Gap map**: your public GitHub repos vs what a Google SWE role leans on. Deterministic keyword evidence, no model.
+3. **Day-by-day plan** sized to your days x hours. Deterministic, no model.
+4. **Questions about your own code**: an open-weight model reads real files from one repo, asks interview
+   questions, and checks your answer against that code. Questions citing files the model never saw are dropped.
 
-What works now
+## Automatic vs not
 
+| Automatic | Needs you / honest limits |
+|---|---|
+| Fetching question lists, scanning repos, gap map, plan | Topics are inferred from question titles (crude) |
+| Questions + answer checking (when a model is attached) | The live free-tier host cannot run a model; point `LLM_BASE_URL` at one |
+| | Gap map sees public repos only, not LeetCode/Codeforces practice; "gap" means no evidence found |
+| | Reddit / search-based experience collection is not built; `POST /api/summarize` summarizes pasted posts |
 
+## Run locally
 
+    pip install -r requirements.txt
+    uvicorn src.main:app --reload
+    # open http://localhost:8000
 
+### Attach an open-weight model
 
-Company-wise LeetCode question patterns (recency + frequency)
-
-
-
-Web UI focused on Google first
-
-
-
-JSON API
-
-
-
-Clear “patterns, not guarantees” labeling + attribution
-
-Local run
-
-pip install -r requirements.txt
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-
-Open http://localhost:8000 → defaults to Google.
-
-CLI:
-
-python -m src.github_ingest --company google --top 15
-
-Deploy on Render (free)
-
-
-
-
-
-Push this repo to https://github.com/meenanoolu/SlothPrep
-
-
-
-Render → New → Web Service → connect repo
-
-
-
-Settings:
-
-
-
-
-
-Name: slothprep
-
-
-
-Build: pip install -r requirements.txt
-
-
-
-Start: uvicorn src.main:app --host 0.0.0.0 --port $PORT
-
-
-
-Instance: Free
-
-
-
-Deploy → open the .onrender.com URL
-
-Next
-
-
-
-
-
-Reddit + search for interview experiences
-
-
-
-Gap map + time-boxed plan
-
-
-
-Local open-weight model for repo-aware questions
-## Open-weight model (new)
-
-SlothPrep talks to any OpenAI-compatible endpoint, so the model is swappable with env vars:
+Local Ollama (private, free after download):
 
     ollama pull gemma3:4b
     export LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=gemma3:4b
-    export GITHUB_TOKEN=...   # recommended: raises GitHub limit from 60 to 5000 req/h
 
-New endpoints: `/api/llm/status`, `/api/gap/{company}?github=USER`,
-`/api/plan/{company}?github=USER&days=14&hours=2`, `/api/repo-questions?github=USER&repo=NAME`,
-`POST /api/check-answer`.
+Hosted open-weight endpoint (Groq, Together, Fireworks...): set `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`.
+If `LLM_BASE_URL` is unset, SlothPrep tries Ollama at `127.0.0.1:11434` using `OLLAMA_MODEL`.
 
-What is automatic vs not: the gap map and plan are deterministic (no model). Repo-aware questions and
-answer checking need a model; Render free tier cannot run one, so the live demo shows them only when
-LLM_BASE_URL points at a reachable open-weight server.
+Also recommended: `export GITHUB_TOKEN=...` (raises GitHub limit from 60 to 5000 requests/hour).
+
+## API
+
+- `GET /api/health`, `GET /api/llm/status`
+- `GET /api/questions/{company}?top=20&window=last_30_days`
+- `GET /api/gap/{company}?github=USER`
+- `GET /api/plan/{company}?github=USER&days=14&hours=2`
+- `GET /api/code-questions?github=USER&repo=NAME&n=4`
+- `POST /api/check-answer` with JSON `{github, repo, question, answer}`
+- `POST /api/summarize` with JSON `{text, company}`
+
+## Tests
+
+    pip install -r requirements-dev.txt
+    pytest
+
+## Deploy on Render (free)
+
+Existing service: push to GitHub and it auto-deploys (or Manual Deploy > Deploy latest commit).
+New service: `render.yaml` in this repo works as a Blueprint, or create a Web Service with
+build `pip install -r requirements.txt` and start `uvicorn src.main:app --host 0.0.0.0 --port $PORT`.
+
+## Data
+
+Community-maintained GitHub lists (mainly snehasishroy/leetcode-companywise-interview-questions).
+Self-reported and NOT official or guaranteed. Treat as patterns only.

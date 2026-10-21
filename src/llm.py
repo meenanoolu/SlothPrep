@@ -20,12 +20,14 @@ from typing import Optional
 # Config – prefer local Ollama
 # ---------------------------------------------------------------------------
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:9b")  # or llama3.2, phi3, etc.
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or os.getenv("LLM_MODEL") or "gemma3:4b"
 
-# Optional OpenAI-compatible fallback (open-weight hosts only)
-OPENAI_BASE = os.getenv("OPENAI_BASE", "")          # e.g. https://api.groq.com/openai/v1
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
+# Any OpenAI-compatible endpoint serving open weights. Ollama itself exposes one at
+# http://localhost:11434/v1, so LLM_BASE_URL works for local Ollama too (no key needed).
+# Legacy names OPENAI_BASE / OPENAI_API_KEY / OPENAI_MODEL are still accepted.
+OPENAI_BASE = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE", "")
+OPENAI_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "llama-3.1-8b-instant"
 
 
 class LLMError(Exception):
@@ -38,6 +40,7 @@ def _ollama_generate(prompt: str, system: Optional[str] = None) -> str:
         "model": OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
+        "options": {"num_ctx": 8192},  # default context is small; avoid silent truncation
     }
     if system:
         payload["system"] = system
@@ -61,8 +64,8 @@ def _ollama_generate(prompt: str, system: Optional[str] = None) -> str:
 
 
 def _openai_compatible_generate(prompt: str, system: Optional[str] = None) -> str:
-    if not OPENAI_BASE or not OPENAI_API_KEY:
-        raise LLMError("OPENAI_BASE / OPENAI_API_KEY not set")
+    if not OPENAI_BASE:
+        raise LLMError("LLM_BASE_URL not set")
 
     url = f"{OPENAI_BASE.rstrip('/')}/chat/completions"
     messages = []
@@ -71,20 +74,15 @@ def _openai_compatible_generate(prompt: str, system: Optional[str] = None) -> st
     messages.append({"role": "user", "content": prompt})
 
     payload = {
-        "model": OPENAI_MODEL or "llama-3.1-8b-instant",
+        "model": OPENAI_MODEL,
         "messages": messages,
         "temperature": 0.3,
     }
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-        },
-        method="POST",
-    )
+    headers = {"Content-Type": "application/json"}
+    if OPENAI_API_KEY:
+        headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=90) as resp:
             body = json.loads(resp.read().decode("utf-8"))
@@ -95,24 +93,18 @@ def _openai_compatible_generate(prompt: str, system: Optional[str] = None) -> st
 
 def generate(prompt: str, system: Optional[str] = None) -> str:
     """
-    Main entry point. Tries Ollama first (local open-weight),
-    then optional hosted open-weight endpoint.
+    Main entry point. If LLM_BASE_URL is set, use that open-weight endpoint
+    (hosted, or Ollama's /v1). Otherwise try local Ollama.
     """
-    # 1. Prefer local Ollama
+    if OPENAI_BASE:
+        return _openai_compatible_generate(prompt, system=system)
     try:
         return _ollama_generate(prompt, system=system)
-    except LLMError:
-        pass
-
-    # 2. Fallback to hosted open-weight endpoint if configured
-    if OPENAI_BASE and OPENAI_API_KEY:
-        return _openai_compatible_generate(prompt, system=system)
-
-    raise LLMError(
-        "No open-weight model available. "
-        "Start Ollama (`ollama serve` + `ollama pull gemma2:9b`) "
-        "or set OPENAI_BASE + OPENAI_API_KEY for a hosted open-weight API."
-    )
+    except LLMError as e:
+        raise LLMError(
+            "No open-weight model available. Start Ollama (`ollama serve` + "
+            f"`ollama pull {OLLAMA_MODEL}`) or set LLM_BASE_URL (+ LLM_MODEL, LLM_API_KEY)."
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -176,18 +168,25 @@ For each question include:
 # ---------------------------------------------------------------------------
 import re
 
-MODEL = OLLAMA_MODEL            # name shown in API responses
+MODEL = OPENAI_MODEL if OPENAI_BASE else OLLAMA_MODEL  # name shown in API responses
 LLMUnavailable = LLMError       # alias used by repo_questions.py / main.py
 
 
 def status() -> dict:
     """Cheap health check so the UI can say honestly whether a model is attached."""
+    if OPENAI_BASE:
+        try:
+            req = urllib.request.Request(f"{OPENAI_BASE.rstrip('/')}/models")
+            if OPENAI_API_KEY:
+                req.add_header("Authorization", f"Bearer {OPENAI_API_KEY}")
+            with urllib.request.urlopen(req, timeout=4) as r:
+                return {"available": r.status == 200, "backend": "open-weight endpoint", "model": MODEL}
+        except Exception:
+            return {"available": False, "backend": "open-weight endpoint (unreachable)", "model": MODEL}
     try:
         with urllib.request.urlopen(f"{OLLAMA_BASE}/api/tags", timeout=3) as r:
             return {"available": r.status == 200, "backend": "ollama", "model": OLLAMA_MODEL}
     except Exception:
-        if OPENAI_BASE and OPENAI_API_KEY:
-            return {"available": True, "backend": "hosted open-weight", "model": OPENAI_MODEL}
         return {"available": False, "backend": None, "model": OLLAMA_MODEL}
 
 
