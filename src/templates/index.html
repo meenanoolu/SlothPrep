@@ -35,6 +35,25 @@
     .examples a { color: var(--accent2); margin-right: 0.8rem; }
     footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); text-align: center; }
     .badge { display: inline-block; background: #243044; color: var(--accent); font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 999px; margin-bottom: 0.75rem; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .field { flex: 1; min-width: 120px; }
+    .field.small { flex: 0 0 110px; min-width: 90px; }
+    input[type="number"], textarea, select { width: 100%; padding: 0.7rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 1rem; font-family: inherit; }
+    textarea { min-height: 80px; resize: vertical; margin-top: 0.5rem; }
+    table.t { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    table.t th, table.t td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.88rem; vertical-align: top; }
+    table.t th { color: var(--muted); font-weight: 600; }
+    .st { font-size: 0.72rem; font-weight: 700; padding: 0.12rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
+    .st.gap { background: rgba(243,18,96,.15); color: #f31260; } .st.thin { background: rgba(245,165,36,.15); color: #f5a524; } .st.proven { background: rgba(61,214,140,.15); color: #3dd68c; }
+    .day { border-top: 1px solid var(--border); padding: 0.6rem 0; } .day h3 { font-size: 0.95rem; color: var(--text); }
+    .hint { font-size: 0.82rem; color: var(--muted); margin-top: 0.5rem; }
+    .err { color: #ff7a90; font-size: 0.9rem; margin-top: 0.75rem; }
+    .qbox { border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; margin-top: 0.8rem; }
+    .qbox .q { color: var(--text); font-weight: 600; font-size: 0.95rem; }
+    .verdict { margin-top: 0.6rem; font-size: 0.88rem; color: var(--text); }
+    .pill { display: inline-block; font-size: 0.75rem; padding: 0.15rem 0.6rem; border-radius: 999px; background: #243044; color: var(--muted); }
+    .pill.ok { color: var(--accent); } .pill.off { color: #f5a524; }
+    [hidden] { display: none !important; }
     .featured { border-color: #3d6b4a; background: linear-gradient(135deg, #1a2332 0%, #1c2a22 100%); }
   </style>
 </head>
@@ -64,28 +83,49 @@
     </div>
 
     <div class="card">
-      <h2>What SlothPrep is building toward</h2>
-      <ul>
-        <li>Auto-collect question lists + interview experience posts</li>
-        <li>Digest of rounds, common topics, reported hard parts</li>
-        <li>Gap map: role requirements vs your GitHub repos</li>
-        <li>Day-by-day plan sized to the hours you have</li>
-        <li>Questions about <em>your</em> code (local open-weight model)</li>
-      </ul>
+      <h2>Do the planning for me</h2>
+      <p>Give your GitHub username and the time you have. SlothPrep reads your public repos, compares them with what the role leans on, and builds a plan.
+         <span class="pill" id="modelPill">checking model…</span></p>
+      <form class="search-row" id="planForm">
+        <div class="field"><label for="gh">GitHub username</label><input type="text" id="gh" placeholder="e.g. meenanoolu" required /></div>
+        <div class="field"><label for="co">Company</label><input type="text" id="co" value="{{ default_company }}" required /></div>
+        <div class="field small"><label for="days">Days</label><input type="number" id="days" value="14" min="1" max="60" /></div>
+        <div class="field small"><label for="hours">Hours/day</label><input type="number" id="hours" value="2" min="0.5" max="12" step="0.5" /></div>
+        <button type="submit" id="planBtn" style="align-self:flex-end">Build plan</button>
+      </form>
+      <p class="hint">First run on the free host can take up to a minute to wake up. Gap map and plan are rule-based (no model). They show evidence found in your repos, not proof you lack a skill.</p>
+      <div class="err" id="planErr" hidden></div>
+    </div>
+
+    <div id="results" hidden>
+      <div class="card"><h2>Gap map: role vs your repos</h2><div id="gapOut"></div><p class="hint" id="gapNote"></p></div>
+      <div class="card"><h2>Most reported topics (inferred)</h2><div id="topicOut"></div><p class="hint" id="topicNote"></p></div>
+      <div class="card"><h2>Your day-by-day plan</h2><div id="planOut"></div></div>
+      <div class="card">
+        <h2>Questions about your own code</h2>
+        <p>Open-weight model reads real files from one of your repos, asks interview questions, then checks your answer against that code.</p>
+        <div class="search-row">
+          <div class="field"><label for="repoSel">Repo</label><select id="repoSel"></select></div>
+          <button type="button" id="qBtn" style="align-self:flex-end">Ask me about this code</button>
+        </div>
+        <div class="err" id="qErr" hidden></div>
+        <div id="qOut"></div>
+      </div>
     </div>
 
     <div class="card">
       <h2>API</h2>
       <ul>
-        <li><code>GET /api/health</code></li>
-        <li><code>GET /api/companies</code></li>
-        <li><code>GET /api/questions/google?top=20&window=last_30_days</code></li>
+        <li><code>GET /api/health</code> · <code>GET /api/llm/status</code></li>
+        <li><code>GET /api/questions/google?top=20&amp;window=last_30_days</code></li>
+        <li><code>GET /api/plan/google?github=USER&amp;days=14&amp;hours=2</code></li>
+        <li><code>GET /api/code-questions?github=USER&amp;repo=NAME</code> · <code>POST /api/check-answer</code></li>
       </ul>
     </div>
 
     <footer>
       <p>{{ attribution }}</p>
-      <p style="margin-top:0.6rem">Built for the Slow & Steady challenge · Open-weight models at the core</p>
+      <p style="margin-top:0.6rem">Built for the Slow &amp; Steady challenge · Open-weight models at the core</p>
     </footer>
   </div>
   <script>
@@ -94,6 +134,95 @@
       const company = document.getElementById("company").value.trim().toLowerCase();
       if (company) window.location.href = "/prep/" + encodeURIComponent(company);
     });
+
+    const $ = (id) => document.getElementById(id);
+    function el(tag, attrs, ...kids) {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") n.className = v; else n.setAttribute(k, v); }
+      for (const k of kids) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+      return n;
+    }
+    async function api(url, opts) {
+      const r = await fetch(url, opts);
+      let body = null; try { body = await r.json(); } catch (_) {}
+      if (!r.ok) throw new Error((body && body.detail) || ("Request failed (" + r.status + ")"));
+      return body;
+    }
+    function showErr(id, msg) { const n = $(id); n.textContent = msg || ""; n.hidden = !msg; }
+
+    api("/api/llm/status").then((s) => {
+      const p = $("modelPill");
+      p.textContent = s.available ? ("model: " + s.model + " (" + s.backend + ")") : "no model attached (gap map + plan still work)";
+      p.className = "pill " + (s.available ? "ok" : "off");
+    }).catch(() => { $("modelPill").textContent = "model status unknown"; });
+
+    let state = { github: "", company: "" };
+
+    $("planForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showErr("planErr", ""); $("results").hidden = true;
+      const btn = $("planBtn"); btn.disabled = true; btn.textContent = "Working…";
+      state = { github: $("gh").value.trim(), company: $("co").value.trim().toLowerCase() };
+      try {
+        const q = new URLSearchParams({ github: state.github, days: $("days").value, hours: $("hours").value });
+        const d = await api("/api/plan/" + encodeURIComponent(state.company) + "?" + q);
+        render(d);
+      } catch (err) { showErr("planErr", err.message); }
+      btn.disabled = false; btn.textContent = "Build plan";
+    });
+
+    function render(d) {
+      const gap = el("table", { class: "t" }, el("tr", {}, el("th", {}, "Skill"), el("th", {}, "Weight"), el("th", {}, "Status"), el("th", {}, "Evidence")));
+      for (const g of d.gap_map) {
+        const ev = g.evidence.map((x) => x.repo + " (" + x.signals.join(", ") + ")").join("; ") || "none found";
+        gap.append(el("tr", {}, el("td", {}, g.skill), el("td", {}, g.weight), el("td", {}, el("span", { class: "st " + g.status }, g.status)), el("td", {}, ev)));
+      }
+      $("gapOut").replaceChildren(gap); $("gapNote").textContent = d.gap_note + " Scanned: " + d.repos_scanned.join(", ") + ".";
+
+      const tt = el("ul", {}); for (const [t, w] of d.top_topics) tt.append(el("li", {}, t + " (weight " + w + ")"));
+      $("topicOut").replaceChildren(tt); $("topicNote").textContent = d.topic_note;
+
+      const plan = $("planOut"); plan.replaceChildren();
+      for (const day of d.plan) {
+        const ul = el("ul", {}); for (const it of day.items) ul.append(el("li", {}, it.task + " · " + it.hours + "h"));
+        plan.append(el("div", { class: "day" }, el("h3", {}, "Day " + day.day + " · " + day.hours + "h"), ul));
+      }
+      const sel = $("repoSel"); sel.replaceChildren();
+      for (const r of d.repos_scanned) sel.append(el("option", { value: r }, r));
+      $("qOut").replaceChildren(); showErr("qErr", "");
+      $("results").hidden = false; $("results").scrollIntoView({ behavior: "smooth" });
+    }
+
+    $("qBtn").addEventListener("click", async () => {
+      showErr("qErr", ""); const out = $("qOut"); out.replaceChildren();
+      const btn = $("qBtn"); btn.disabled = true; btn.textContent = "Thinking… (local models can take a minute)";
+      try {
+        const repo = $("repoSel").value;
+        const d = await api("/api/code-questions?" + new URLSearchParams({ github: state.github, repo: repo, n: 3 }));
+        if (!d.questions.length) throw new Error("The model returned no usable questions. Try again.");
+        out.append(el("p", { class: "hint" }, "Model: " + d.model + " · files used: " + d.files_used.join(", ")));
+        for (const q of d.questions) out.append(questionBox(repo, q));
+      } catch (err) { showErr("qErr", err.message); }
+      btn.disabled = false; btn.textContent = "Ask me about this code";
+    });
+
+    function questionBox(repo, q) {
+      const ta = el("textarea", { placeholder: "Type your answer…" });
+      const res = el("div", { class: "verdict" });
+      const b = el("button", { type: "button" }, "Check my answer against the code");
+      b.addEventListener("click", async () => {
+        b.disabled = true; res.textContent = "Checking…";
+        try {
+          const d = await api("/api/check-answer", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ github: state.github, repo: repo, question: q.question, answer: ta.value }) });
+          const r = d.result || {}; const list = (a) => (Array.isArray(a) && a.length ? a.join("; ") : "none");
+          res.replaceChildren(el("div", {}, "Verdict: ", el("strong", {}, r.verdict || "unknown")),
+            el("div", {}, "Matches code: " + list(r.matches_code)), el("div", {}, "Contradicts code: " + list(r.contradicts_code)), el("div", {}, "Missing: " + list(r.missing)));
+        } catch (err) { res.textContent = err.message; }
+        b.disabled = false;
+      });
+      return el("div", { class: "qbox" }, el("div", { class: "q" }, q.question), el("div", { class: "hint" }, q.file + " — " + (q.why_asked || "")), ta, el("div", { style: "margin-top:.5rem" }, b), res);
+    }
   </script>
 </body>
 </html>
